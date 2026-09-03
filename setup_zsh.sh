@@ -2,6 +2,7 @@
 set -e # Exit immediately if a command exits with a non-zero status
 
 ZSH_VERSION="5.9"
+NCURSES_VERSION="6.4"
 ZSH_SRC_URL="https://sourceforge.net/projects/zsh/files/zsh/${ZSH_VERSION}/zsh-${ZSH_VERSION}.tar.xz/download"
 LOCAL_DIR="$HOME/.local"
 ZSH_BIN="$LOCAL_DIR/bin/zsh"
@@ -21,12 +22,25 @@ else
     TEMP_DIR=$(mktemp -d)
     cd "$TEMP_DIR"
     
+    echo "-> Downloading and compiling ncurses ${NCURSES_VERSION} (required for zsh)..."
+    curl -LO "https://ftp.gnu.org/gnu/ncurses/ncurses-${NCURSES_VERSION}.tar.gz"
+    tar -xzf ncurses-${NCURSES_VERSION}.tar.gz
+    cd "ncurses-${NCURSES_VERSION}"
+    ./configure --prefix="$LOCAL_DIR" --with-shared --without-debug --enable-widec
+    make -j$(nproc)
+    make install
+    cd ..
+    
     echo "-> Downloading Zsh ${ZSH_VERSION}..."
     curl -L "$ZSH_SRC_URL" -o zsh.tar.xz
     tar -xf zsh.tar.xz
     cd "zsh-${ZSH_VERSION}"
     
     echo "-> Compiling Zsh (this might take a minute)..."
+    export CFLAGS="-I$LOCAL_DIR/include -I$LOCAL_DIR/include/ncursesw"
+    export CPPFLAGS="-I$LOCAL_DIR/include -I$LOCAL_DIR/include/ncursesw"
+    export LDFLAGS="-L$LOCAL_DIR/lib -Wl,-rpath,$LOCAL_DIR/lib"
+    
     ./configure --prefix="$LOCAL_DIR"
     make -j$(nproc)
     make install
@@ -116,4 +130,10 @@ else
 fi
 
 # personal config
-echo 'export UV_INDEX_URL="https://pypi.tuna.tsinghua.edu.cn/simple"' >> ~/.zshrc
+if ! grep -q "UV_INDEX_URL" "$HOME/.zshrc"; then
+    echo 'export UV_INDEX_URL="https://pypi.tuna.tsinghua.edu.cn/simple"' >> ~/.zshrc
+fi
+
+echo "========================================"
+echo " All done! Please run 'source ~/.bashrc' or reconnect to the server to start using Zsh."
+echo "========================================"
